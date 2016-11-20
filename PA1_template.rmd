@@ -1,0 +1,156 @@
+---
+title: "Reproductible Research Project 1"
+author: "Hugo Dunlop"
+date: "Friday, November 18, 2016"
+output: md_document
+
+---
+
+
+Step 1: Code to import "activity.csv" dataset.  Then the str, summary, head, tail and nrow functions were used to checkthat the import was successful.
+
+Included in this step is the use of the lubridate package to convert the date variable from a FACTOR data to a Date variable.  This new variable is called DTE.
+
+Included in this step is the creation of a weekday variable using the wday function of lubridate package, this variable is called weekday.
+
+Missing data has not been modified.
+
+
+```{r Open and Process Data, echo=TRUE}
+
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+setwd("E:/RCourses/ReproducibleResearch/Project1")
+stepdata <- read.csv("activity.csv")
+summary(stepdata)
+head(stepdata)
+str(stepdata)
+stepdata$DTE <- dmy(stepdata$date)
+stepdata$day <- wday(stepdata$DTE, label = TRUE) 
+stepdata$weekday <- ifelse(stepdata$day == "Sun" | stepdata$day == "Sat", 0,1)
+table(stepdata$weekday)
+summary(stepdata)
+head(stepdata)
+tail(stepdata)
+nrow(stepdata)
+```
+
+Step 2: The objective for this section is to generate a histogram of the total number of steps taken per day.
+All cases with missing values were removed.This refined version of stepdata was called stepdata1
+The stepdata1 dataset was summarised using dpylr package to result in a dataset group by date with total daily steps (variable called stepsperdayRaw) for each date.  The summarisedataset is called totalstepsperdayRaw.
+Histogram is then generated from this dataset.
+
+
+```{r Histogram Steps Raw Data}
+stepdata1 <- stepdata[complete.cases(stepdata),]
+nrow(stepdata1)
+groupbyday <- group_by(stepdata1,DTE)
+totalstepsperdayRaw <- summarise(groupbyday, stepsperdayRaw = sum(steps))
+totalstepsperdayRaw
+nrow(totalstepsperdayRaw)
+
+hist(totalstepsperdayRaw$stepsperdayRaw, 
+     main="Histogram of Number of Steps Taken Per Day",
+     las =1, 
+     xlab="Total No daily Steps")
+```
+
+Step 3: The mean and median number of steps taken per day was determined using the summarise function of dplyr using data without missing data.
+
+```{r Mean and Median Steps}
+     meanstepsperdayRaw <- summarise(totalstepsperdayRaw, meansteps1 = mean(stepsperdayRaw))
+     meanstepsperdayRaw
+     medianstepsperdayRaw <- summarise(totalstepsperdayRaw, mediansteps1 = median(stepsperdayRaw))
+     medianstepsperdayRaw
+```
+
+Step 4:  The time series plot of the 5 minute intervals and the average number of steps taken for each 5-minute interval.
+
+```{r Time Series Plot Raw}
+groupbyinterval <- group_by(stepdata1,interval)
+avgstepsperintervalRaw <- summarise(groupbyinterval, avgstepsperintRaw = mean(steps))
+summary(avgstepsperintervalRaw)
+stepplot <- ggplot(data = avgstepsperintervalRaw, aes(interval,avgstepsperintRaw))+
+        geom_line()+
+        ggtitle("Average Number Steps per 5 Min Interval")+
+        xlab("5 Minute Interval") +
+        ylab("Avg Steps Per 5 minute Interval")
+stepplot
+```
+
+Step 5: The arrange function of dplyr was used to sort dataset by avgstepsperRaw in descending order, then use head function to determine the interval which has the highest average number of steps.
+
+```{r Highest Number Steps Interval}
+sortedbystepsRaw <- arrange(avgstepsperintervalRaw,desc(avgstepsperintRaw))
+maxstepint <- head(sortedbystepsRaw,1)
+maxstepint$interval
+maxstepint$avgstepsperintRaw
+
+```
+
+Step 6: Imputing missing step data for a 5 minute interval is done by replacing each missing step datum with the average step vale for the corresponding 5 minute interval.  The raw activity.csv dataset was split into two parts: one dataset with complete data (stepdata1) and one dataset with missing step data (stepmissing).
+
+Using the stepdata1 dataset, a dataset was created with the average number of steps for each 5 minute interval (avgstepsperintervalRaw - created at Step 4).  The avgstepsperintervalRaw dataset was merged with stepmissing dataset by interval to replace the missing value with the corresponding intervals average number steps for that interval.
+
+Then combine datasets: stepdata1 and stepmissing to make the final dataset with imputed missing data: stepdataALL.  A variable was created in both stepdata1 and stepmissing datasets called "realdata" which denoted the observation real or imputed. 
+
+
+```{r Imputing Missing Data}
+stepdata1 <- stepdata[complete.cases(stepdata),]
+stepmissing <- stepdata[!complete.cases(stepdata),]
+nrow(stepdata1)
+nrow(stepmissing)
+nrow(avgstepsperintervalRaw)
+head(stepmissing)
+stepmissing <- left_join(stepmissing, avgstepsperintervalRaw, by = "interval")
+stepmissing$steps <- stepmissing$avgstepsperintRaw
+stepmissing <- select(stepmissing, steps, date, interval, DTE, day, weekday)
+stepmissing$realdata <- 0
+stepdata1$realdata <- 1
+stepdataALL <- rbind(stepdata1,stepmissing)
+str(stepdataALL)
+```
+
+Step 7:  Histogram of the average steps per day is created using the same code as used in Step 2 but using stapdataALL dataset.  In addition, the mean and median total steps per day are calculated using stepdataALL dataset.
+
+```{r Histogram Steps Includes Imputed Data}
+groupbydayALL <- group_by(stepdataALL,DTE)
+totalstepsperdayALL <- summarise(groupbydayALL, stepsperdayALL = sum(steps))
+totalstepsperdayALL
+nrow(totalstepsperdayALL)
+
+hist(totalstepsperdayALL$stepsperdayALL, 
+     main="Histogram of Number of Steps Taken Per Day",
+     las =1, 
+     xlab="Total No daily Steps")
+## Calculate mean and median number of steps per day
+     meanstepsperdayALL <- summarise(totalstepsperdayALL, meanstepsALL = mean(stepsperdayALL))
+     meanstepsperdayALL
+     medianstepsperdayALL <- summarise(totalstepsperdayALL, medianstepsALL = median(stepsperdayALL))
+     medianstepsperdayALL
+
+```
+
+Step 8: Create plots of average steps per interval across weekdays and weekends using ggplot package.
+Dataset created first to group by interval and weekday variables
+
+
+```{r Plot of Steps Across Weekday and Weekend}
+groupbyintervalALL <- group_by(stepdataALL,interval,weekday)
+avgstepsperintervalALL <- summarise(groupbyintervalALL, avgstepsperintALL = mean(steps))
+avgstepsperintervalALL$weekday <- ifelse(avgstepsperintervalALL$weekday==0, "Weekend", "Weekday") 
+avgstepsperintervalALL$weekday <- factor(avgstepsperintervalALL$weekday)
+summary(avgstepsperintervalALL)
+stepplotWeekday <- ggplot(data = avgstepsperintervalALL, aes(interval,avgstepsperintALL))+
+        geom_line()+
+        facet_grid(weekday~.)+
+        ggtitle("Average Number Steps per 5 Min Interval for Weekdays and Weekends")+
+        xlab("5 Minute Interval") +
+        ylab("Avg Steps Per 5 minute Interval")
+print(stepplotWeekday)
+
+```
+
+
+
